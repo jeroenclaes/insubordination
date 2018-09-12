@@ -1,0 +1,1024 @@
+---
+title: 'Corpus linguistics with R: A quickish introduction'
+author: 'Jeroen Claes '
+date: "jeroen.claes@kuleuven.be | jeroen@cropland.be"
+output:
+  html_document:
+    df_print: paged
+    number_sections: yes
+    toc: yes
+    toc_float: yes
+  word_document:
+    reference_docx: /Users/jeroenclaes/Desktop/scraping/reference.docx
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval=T, results="markup")
+Sys.setenv(TZ="Europe/Berlin")
+```
+
+# Reading data to a data.frame
+
+## Data.frames
+- Data.frames are the R equivalent of a spreadsheet or a database table
+- They are meant to hold structured data
+- According to one of the leading figures of the R community, Hadley Wickham, in order to facilitate analysis, we should strive to format our data.frames following what is known as the *tidy* format:
+    - Each row records one observation
+    - Each column records an attribute or property of that observation
+- While this is in no manner the only way of storing data in R, tidy data.frames are to be preferred whenever possible over other types of representations (e.g., lists, S3 or S4 objects), because:
+    - Many modeling functions expect tidy data.frames
+    - They allow for more efficient computation and faster filtering of data
+    - They can be stored as CSV (comma-separted values) files, which allow for the easy exchange of data between researchers and software packages
+    
+## Reading data to a data.frame
+- R has build-in CSV reader functions, but these tend to be slow and have some unwanted side effects
+- Luckily for us, the `readr` package has introduced fast, fault-tolerant - you will have guessed it already - CSV readers
+- If you don't have the `readr` package installed, let's go ahead and install it
+
+```{r pressure, echo=TRUE, eval=FALSE}
+install.packages("readr")
+```
+
+- Next, in order to read the data into R, all we have to do is:
+```{r pressure2, echo=TRUE, warning=FALSE, error=FALSE}
+library(readr)
+dataSet <- read_csv("http://www.jeroenclaes.be/r_for_corpus_linguistics/textSample.csv")
+```
+
+# Working with data.frames 
+- The corpus data we will be using in this tutorial is stored in a data.frame, which is formatted in the following way :
+    - Each row constitutes an article scraped from a newspaper website
+    - Each column records an attribute of the article:
+        - source: newspaper source
+        - author: the author
+        - tags: tags provided by the newspaper website for the content in the newspaper
+        - title
+        - description: subtitle or short description of the text
+        - section
+        - date
+        - text: the actual text of the article
+        
+## Exploring the structure of data.frames
+- Whenever we're not sure about the structure of an R object, we can call `str` to inspect its internal structure.
+```{r structureData, eval=FALSE}
+str(dataSet)
+```
+
+- We can also get a nice table-like view of it
+```{r view, eval=F}
+View(dataSet)
+```
+
+- With `dim` we compute the number of dimensions (columns and rows), with `nrow` the number of rows, and with `ncol` the number of columns.
+```{r dimensions}
+dim(dataSet)
+nrow(dataSet)
+ncol(dataSet)
+```
+
+## `head`
+- Print the first N lines from the data.frame
+```{r headTail}
+#first 6 lines 
+ head(dataSet)
+```
+
+## `tail`
+- Print the last N lines from the data.frame
+```{r tail}
+#last 10 lines
+tail(dataSet, 10)
+```
+
+## `glimpse`
+- For data with many columns, RStudio will omit the columns that do not fit the console window. There's a function `glimpse` in the `dplyr` package that prints the first couple of lines of your data frame as a list. 
+```{r glimpse}
+library(dplyr)
+glimpse(dataSet)
+```
+
+## `summary`
+- The function `summary` prints a general overview of the values in a data.frame.
+```{r summary}
+summary(dataSet)
+```
+
+## Dollar-sign operator: extracting a single column
+- To extract a column (a single vector) from the data.frame, we use the dollar sign operator e.g., `dataSet$source` 
+```{r dollarOperator}
+#first 6 lines of just the column source
+head(dataSet$source)
+
+#last 10 lines
+tail(dataSet$source, 10)
+```
+
+## Extracting multiple columns
+- To extract multiple columns from a data.frame, we simply put a character vector of the column names (`c("source", "author")` in the example) we want to extract between square brackets, preceded by a comma:
+```{r subsetcolumns}
+#first 6 lines of source and author
+head(dataSet[, c("source", "author")])
+```
+
+## Subsetting by rows 
+- To extract rows from a data.frame we use a numeric vector of row numbers (`c(1, 2, 5)` in the example) between square brackets, followed by a comma
+```{r subsetRows}
+dataSet[c(1, 2, 5), ]
+```
+
+## Subsetting: the system
+- You will have noticed that the general pattern for subsetting dataframes is the following:
+    - `dataframeName[rows, columns]`
+
+##Conditional selection by row 
+- Instead of writing the row numbers ourselves, we can also ask R to compute the indices of rows that fulfill some condition.
+- The following  statement will return the first six rows of all rows for which source equals *AR_clarin* (`source == AR_clarin`)
+
+```{r condSubsets}
+head(dataSet[dataSet$source == "AR_clarin", ])
+```
+
+- Other useful conditions are:
+    - `is.na()` (e.g., `dataSet[is.na(dataSet$source), ]`) - "is empty value"
+    - `!is.na()` - "is NOT is empty value"
+    -  `<` - "smaller than"
+    - `<=` - "smaller than or equal to"
+    - `>` - "larger than"
+    - `>=` - "larger than or equal to"
+    - `%in%` (e.g., `dataSet[dataSet$source %in% c("mx_universal", "mx_reforma")]`) - "one of list"
+    -  `%in%` with NOT operator (e.g., `dataSet[!dataSet$Freq %in% c("mx_universal", "mx_reforma")]`) - "not one of list"
+ 
+## Adding columns
+- Adding columns is just as easy as selecting columns
+- We simply type the dataframe name, followed by the dollar-sign operator and a name for the column. Then we can assign whatever value we want to the new column
+```{r addingColumns}
+dataSet$corpus <- "newspapers"
+glimpse(dataSet)
+```
+
+# Working with data.frames: the *dplyr* way
+- The way of working with data.frames we've outlined above has the advantage that it does not rely on any third-party packages
+- If your code works now, it is most likely to work in the same way in the foreseeable future
+- However, the system is not exactly readable, for which debugging and revisiting code after some time may be cumbersome and tedious
+- Fortunately, there's a competing way to achieve the same functionality, drawing on the widely used [*dplyr* package](https://dplyr.tidyverse.org/)
+- Using *dplyr* functions has the advantage that your code is more readable and intuitive. In addition, by now, multiple backends exist for *dplyr*. As a result, you may use the exact same code to apply the same operations on a local R data.frame, on a SQL database (see [*dbplyr*](https://dbplyr.tidyverse.org/)), or even on Apache Spark data structures (a distributed computing environment designed for the analysis of Big Data; see [*sparklyr*](http://spark.rstudio.com/)). 
+- All of this comes at the cost of introducing a dependency on the *dplyr* package. If something changes in the way the package works, your code may become broken. 
+- But, as you will notice in a bit, the benefits clearly outweigh the costs 
+
+## Getting *dplyr*
+- If you haven't installed *dplyr* already, let's go ahead and install the package
+```{r, eval=F}
+install.packages("dplyr")
+```
+
+## *dplyr* functions (or "verbs")
+- According to the creator of the *dplyr* package, Hadley Wickham, programming with data implies the following steps:    
+
+    - Figure out what you want to do
+    - Describe those tasks in the form of a computer program
+    - Execute the program
+
+- The *dplyr* package makes these steps fast and easy:
+
+    - By constraining your options, it helps you think about your data manipulation challenges
+    -It provides simple “verbs”, functions that correspond to the most common data manipulation tasks, to help you translate your thoughts into code
+    - It uses efficient backends, so you spend less time waiting for the computer
+
+- In this context, we can better understand the subtitle of the package: *A grammar of data manipulation*. In other words, the package attempts to provide a structured framework for data analysis, using only a few functions or "verbs". Let us review the most important verbs. 
+
+### Pipe operator (`%>%`) 
+- The pipe operator is a small function that passes the output of the expression on its left-hand side to the function on its right-hand side
+- Using this operator makes your code more readable, as it will involve fewer variables, nested functions, or self-assigments, whichwould otherwise contain the intermediary steps of your program
+- For example, the following two code snippets are notational variants, but the second one is much more readable than the first one
+```{r, eval=FALSE}
+# Without pipes
+dataSet <- filter(dataSet, a=="a")
+dataSet <- arrange(group_by(dataSet,c), desc(b))
+
+# With pipes
+dataSet <- dataSet %>%
+  filter(a=="a") %>%
+  group_by(c) %>%
+  arrange(desc(b))
+
+```
+
+ 
+### `filter`
+- The `filter` function applies by-row filtering to a data.frame
+- Like other *dplyr* functions, this verb uses *lazy evaluation*, meaning that you don't have to write `dataSet$a`. 
+Rather, the function is able to figure out what you mean when you just write `a`
+- This saves time, and again, makes your code more readable
+- The `filter` function takes as its first argument a data.frame and as its second a condition. These can take the form of conditions we've discussed above
+
+```{r, eval=FALSE}
+dataSet <- dataSet %>%
+  filter(a=="a")
+```
+
+### `mutate`
+- The `mutate` function alters or adds columns in a data.frame
+- Its first argument is a data.frame, the other arguments have to be column specifications
+```{r, eval=FALSE}
+dataSet <- dataSet %>%
+  mutate(a=a*2, b=a*3, c=a*4)
+```
+
+### `summarise`
+- The function `summarise` is intended to summarize the values of a data.frame (or groups in the data.frame; see below) in a single value, e.g., the mean, the number of rows, the number of unique values, etc.
+- For example, to compute the number of articles or the distinct number of titles in our data, we can use summarise and the functions `n()` and `n_distinct()` to compute our result: 
+    - `n()` computes the number of rows in a data.frame
+    - `n_distinct()` computes the number of unique values in a column
+
+```{r}
+dataSet %>%
+  summarise(n_articles=n(), n_distinct_titles=n_distinct(title))
+``` 
+
+### `group_by`
+- The `group_by` function allows you to specify groups in the data, based on column values
+- For instance, if we would like to compute the number of articles or the distinct number of titles per source, we could use `group_by` and `summarise` to compute our result
+- To undo the grouping of a data.frame, we use `ungroup`
+```{r}
+dataSet %>%
+  group_by(source) %>%
+  summarise(n_articles=n(), n_distinct_titles=n_distinct(title))  
+
+```
+
+### `arrange`
+- Finally, the verb `arrange` orders the rows of a data.frame by the values of one or more columns
+- The first argument of the function is a data.frame, the subsequent values are the columns to sort the rows by
+- If we wrap the column name(s) with the function `desc`, we can sort the values in decreasing order
+
+```{r}
+dataSet %>%
+  group_by(source) %>%
+  summarise(n_articles=n(), n_distinct_titles=n_distinct(title)) %>%
+  arrange(desc(n_articles))
+```
+
+- In the remainder of this tutorial, we will learn to extract, POS-tag, and annotate corpus samples from a tidy data.frame corpus using *dplyr* functions
+
+# Regular expressions: the chisel of the corpus linguist
+- One of the key properties of language is the fact that it allows for the generation of an infinite array of strings by combining a finite number of words and grammatical devices
+- This implies that, when we want to extract all the relevant examples of a particular grammatical construction from our corpus, in most cases, it will be infeasible to come up with all possible word combinations that instantiate our grammatical pattern of interest
+- Fortunately, there's something akin to a construction template in most programming languages: regular expressions
+- Regular expressions form a system of symbols that allows us to describe the patterns we are interested in. These patterns take the form of sequences of numbers, letters, punctuation, spaces, and word boundaries
+- As is the case for any symbolic system, we have to learn the meaning of the symbols before we can apply the system. Let's dive in!
+
+## Some toy text
+- To illustrate the regular expressions, we will use the first sentence of the Cervantes' classic *El ingenioso Hidalgo Don Quijote de la Mancha* 
+- The text reads as follows:
+```{r, eval=T, echo=FALSE}
+suppressPackageStartupMessages(suppressWarnings(suppressMessages(library(stringi))))
+toyText <-"En un lugar de la Mancha, de cuyo nombre no quiero acordarme, no ha mucho tiempo que vivía un hidalgo de los de lanza en astillero, adarga antigua, rocín flaco y galgo corredor."
+print(toyText)
+```
+
+
+## Basic building blocks: letters and numbers
+- In its most basic form, a regular expression describes a sequence of characters from a particular range: 
+    - The range of lowercase letters follows the characters that appear in the English alphabet in alphabetical order. 
+    - The range of uppercase letters follows the characters that appear in the English alphabet in alphabetical order. 
+        - The range `a-z` describes all lowercase letters, but you could limit the range to `a-g`, `a-d`, etc.
+        - The range `A-Z` describes all uppercase letters, but you could limit the range to `A-F`, `B-U`, etc.
+    - The range of numbers follows the sequence `0-9`.
+    - Square brackets (`[` and `]`) mark the beginning and the end of a character sequence
+    - So, if we want to extract any single lowercase letter from a text, we can use the following regular expression: `[a-z]`. Applied to our Quijote fragment, this expression yields (only first 10 results shown):
+    
+```{r, echo=F}
+stri_extract_all_regex(toyText, "[a-z]") %>% unlist() %>% head(10)
+```
+- Note that our expression only matches the lowercase characters of the English alphabet. We did not extract any uppercase or accented letters (e.g., *í*, *ñ*). 
+- To extract any single number from a text, we can use the following alternative: `[0-9]`. Applied to our Qijote fragment, this expression yields `NA`, as there are no numbers in the sentence
+
+```{r, echo=F}
+stri_extract_all_regex(toyText, "[0-9]") %>% unlist() %>% head(10)
+```
+
+## Basic building blocks: named character classes
+- The ranges we discussed in the previous section only cover the English alphabet. But what about the typical characters of, say, Spanish, Portuguese and French? These will not match the `[a-zA-Z]` ranges.
+- We could include these characters explicitly as extra characters in our pattern descriptions, but that cumbersome task is prone to error (e.g., omitting relevant characters). Fortunately, there's a more convenient way of matching them: named character classes.
+- Named character classes are instructions for the regular expression engine to match, for example, any letter character, no matter what alphabet. 
+- In R, we can use the following named character classes. Note that these are only available in R in this form, other programming languages may implement a (slightly) different syntax
+    - `[:alpha:]` any letter character
+    - `[:upper:]` any uppercase letter character
+    - `[:lower:]` any lowercase letter character
+    - `[:digit:]` any number character
+    - `[:alnum:]` any letter/number character
+    - `[:punct:]` any punctuation mark (e.g., ., ,, :, etc.)
+    - `[:print:]` any printable character
+    - `.` any character. To match a dot, you have to escape this special character with two backslashes
+- Observe that our character classes always appear between square brackets!
+
+## Basic building blocks: word boundaries
+- Another important componant of a powerful regular expression is the ability to mark word boundaries, as it allows us to define how sequences of words should look like
+- A word boundary is defined as a punctuation mark, space, or the beginning/ending of a line. The point where our character sequence touches any of these character types, is where the word boundary is situated. 
+- The word boundary is symbolized by `\\b`
+- It is important to note that the word boundary symbol marks the boundary, not spaces or punctuation marks themselves, these still have to be included in our descriptions!
+
+## Basic building blocks: line beginning and line end
+- Finally, our expressions should be able to mark the beginning or ending of strings
+- The beginning of the string is expressed by the symbol `^`
+- The end of the string is expressed by the symbol `$`
+
+## Quantifiers
+- Of course, in most cases we are not interested in extracting any single letter or number from a text. Rather, our patterns will usually span multiple number or letter characters. 
+- This is where *quantifiers* come into the picture. Quantifiers are special symbols that instruct the regular expression engine to search for:
+    - Everything except the pattern defined afterwards
+    - One or none instances of the previous pattern
+    - Exactly N instances of the previous pattern
+    - Any number of instances of the previous pattern between X and Y
+    - At least N instances of the previous pattern
+    - One or multiple instances of the previous pattern 
+- Let us consider each of these cases more closely.
+
+### Everything except the pattern defined afterwards
+- To select everything except the pattern we define, we use a peculiar syntax: 
+    - `^` (which normally stands for the start of a line) followed by the definition of a pattern
+- So, to select everything except alphanumeric characters and spaces, we could use:
+    - `[^[:alnum:] ]`
+    - Applied to our quijote fragment, this expression extracts all punctuation. 
+    
+```{r, echo=F}
+stri_extract_all_regex(toyText, "[^[:alnum:] ]") %>% unlist() %>% head(10)
+```
+
+- This expression is used most often to remove everything except alphanumeric characters and spaces from a text with a find/replace function. Compare the first version of our sentence to the second one.
+
+```{r, echo=F}
+toyText
+```
+
+
+```{r, echo=F}
+stri_replace_all_regex(toyText, "[^[:alnum:] ]", "") %>% unlist() %>% head(10)
+```
+      
+### One or none instances of the previous pattern
+- To select one or no instances of a pattern, we use the question mark symbol `?`
+- So, to define a pattern that is composed of a single letter followed by a single space character or nothing at all, we could write:
+    - `[[:alpha:]][ ]?`
+    - Applied to the Quijote, this would produce (first 10 results)
+    
+```{r, echo=F}
+stri_extract_all_regex(toyText, "[[:alpha:]][ ]?") %>% unlist() %>% head(10)
+```
+
+### Exactly N instances of the previous pattern
+- To select exactly N instances of a pattern, we use the number between curly brackets: e.g., `{5}`
+- So, to extract all words that are composed of exactly five letters, we would write:
+ - `\\b[[:alpha:]]{5}\\b`
+ - Note that we wrap our expression with word boundary symbols here to make sure that we only match full words
+ 
+```{r, echo=F}
+stri_extract_all_regex(toyText, "\\b[[:alpha:]]{5}\\b") %>% unlist() %>% head(10)
+```
+
+### Any number of instances of the previous pattern between X and Y
+- To select any number of instances of a pattern between two numbers, we use the two numbers between curly brackets: e.g., `{2, 4}`
+- So, to extract all words with two to four letters, we would write (notice the comma between the two numbers):
+    - `\\b[[:alpha:]]{2,4}\\b`
+    
+```{r, echo=F}
+stri_extract_all_regex(toyText, "\\b[[:alpha:]]{2,4}\\b") %>% unlist() %>% head(10)
+```
+
+### At least N instances of the previous pattern 
+- To select at least N instances of a pattern, we use the minimum number of occurences between curly brackets followed by a comma: e.g., `{2,}`
+- So, to extract all words with at least two letters, we would write (notice the comma):
+    - `\\b[[:alpha:]]{2,}\\b`
+    
+```{r, echo=F}
+stri_extract_all_regex(toyText, "\\b[[:alpha:]]{2,}\\b") %>% unlist() %>% head(10)
+```
+
+### One or multiple instances of the previous pattern 
+- To select any number of instances of a pattern, we use the plus sign `+`
+- So, to extract any word, we would write:
+    - `\\b[[:alpha:]]+\\b`
+- You will have guessed that this is the quantifiers that is used most often. We saved the most powerful one for last!
+
+```{r, echo=F}
+stri_extract_all_regex(toyText, "\\b[[:alpha:]]+\\b") %>% unlist() %>% head(10)
+```
+
+## Groups
+- Our regular expressions will usually contain several words (sequences of characters, delimited by word boundaries), separated by spaces or punctuation 
+- It is good practice to introduce groups in our expressions, one group for each word. 
+- Groups are enclosed between parentheses `()`
+- Once we have defined a group, we can apply a quantifier to it, by having it followed by one of the quantifier symbols. 
+- So, to extract any number of words separated by spaces, we could define this expression: 
+    - `(\\b[[:alpha:]]+\\b )+`
+```{r, echo=F}
+stri_extract_all_regex(toyText, "(\\b[[:alpha:]]+\\b )+") %>% unlist() %>% head(10)
+```
+
+## OR statements
+- When we define a group, we can also use an *OR* statement with the pipe symbol `|`
+- If a group includes such a statement, it will match any of the alternatives that are specified by the group. 
+    - So, for example, the following expression will match the words *a* OR *y*:
+        - `\\b(a|y)\\b`
+```{r, echo=F}
+stri_extract_all_regex(toyText, "\\b(a|y)\\b") %>% unlist() %>% head(10)
+```
+## Advanced regular expressions: (negative) lookahead and lookbehind
+- Up until now we have been concerned with describing the patterns we would like to capture
+- Regular expressions also allow us to specify the patterns that should (not) precede or follow the pattern we would like to capture
+- To achieve this, we use (negative) lookahead and lookbehind statements
+
+### Positive lookahead
+- To match a pattern only when it is followed by another pattern, we can use a lookahead statemen 
+- Basically, such a statement tells the regular expression engine only to match the pattern defined in the first portion of our regular expression if it is followed by the pattern that is specified by the lookahead statement
+- A lookahead statement takes the following form:
+    - `GROUP(?=EXPRESSION)`
+- So, to match all words followed by a punctuation mark, we could use:
+    `(\\b([[:alpha:]]+\\b))(?=([[:punct:]]))`
+    
+```{r, echo=F}
+stri_extract_all_regex(toyText, "(\\b([[:alpha:]]+\\b))(?=([[:punct:]]))") %>% unlist() %>% head(10)
+```
+    
+### Negative lookahead
+- To match a pattern only when it is not followed by another pattern, we can use a negative lookahead statement
+- Basically, such a statement tells the regular expression engine only to match the pattern defined in the first portion of our regular expression if it is not followed by the pattern that is specified by the lookahead statement
+- A negative lookahead statement takes the following form:
+    - `GROUP(!?EXPRESSION)`
+- So, to match all words not followed by a punctuation mark, we could use:
+    `(\\b([[:alpha:]]+\\b))(?!([[:punct:]]))`
+    
+```{r, echo=F}
+stri_extract_all_regex(toyText, "(\\b([[:alpha:]]+\\b))(?!([[:punct:]]))") %>% unlist() %>% head(10)
+```
+
+### Positive lookbehind
+- To match a pattern only when it is preceded by another pattern, we can use a lookbehind statement 
+- Basically, such a statement tells the regular expression engine only to match the pattern defined in the second portion of our regular expression if it is preceded by the pattern that is specified by the lookbehind statement
+- A lookbehind statement takes the following form:
+    - `(?<=EXPRESSION)GROUP`
+- So, to match all words preceded by a punctuation mark and a space, we could use:
+    `(?<=([[:punct:]] ))(\\b([[:alpha:]]+\\b))`
+```{r, echo=F}
+stri_extract_all_regex(toyText, "(?<=([[:punct:]] ))(\\b([[:alpha:]]+\\b))") %>% unlist() %>% head(10)
+```   
+
+### Negative lookbehind
+- To match a pattern not preceded by another pattern, we can use a negative lookbehind statement. 
+- Basically, such a statement tells the regular expression engine only to match the pattern defined in the second portion of our regular expression if it is not preceded by the pattern that is specified by the lookbehind statement
+- A negative lookbehind statement takes the following form:
+    - `(?<!EXPRESSION)GROUP`
+- So, to match all words not preceded by space and a punctuation mark, we could use:
+    `(?<!([[:punct:]] ))(\\b([[:alpha:]]+\\b))`
+    
+```{r, echo=F}
+stri_extract_all_regex(toyText, "(?<!([[:punct:]] ))(\\b([[:alpha:]]+\\b))") %>% unlist() %>% head(10)
+```   
+
+- Before closing, it is important to note that indefinite quantifiers (`?`, `+`, `{N,}`, and `{N,N}`) are not allowed in (negative) lookahead or lookbehind statements. We can only specify (negative) lookahead/lookbehind patterns that have a fixed length. 
+    - E.g., `(?<=[[:alpha:]]{3}) [[:alpha:]]+` will work
+    - E.g., `(?<=[[:alpha:]]+) [[:alpha:]]+` will not work
+
+# Preparing, filtering and extracting elements from a corpus using regular expressions
+- The above sections presented - perhaps too briefly - the basic symbolic system behind regular expressions. This symbolic system is available with only minor variations in most programming languages and even with certain Unix/Linux utilities such as e.g., `grep`, `awk` and `sed`
+- What we haven't covered up until now is the way we can apply this symbolic logic in R
+- In this section, we will focus on two aspects:
+    - The build-in functions `grep` and `grepl`, which are mainly used to filter data.frames and vectors
+    - Various functions from the [*string* package](https://github.com/gagolews/stringi) (Gagolewski & Tartanus, 2016)
+- Note that these are not the only R functions to accept regular expressions as part of their inputs. Some of the functionality of e.g., `stringi`'s string replacement functions can also be achieved with the base function `gsub`, albeit much slower
+- Let us consider each of these two function types from up close. But first, let us define the pattern that we will be looking for in our case study: Spanish clause-initial *que*
+
+## The pattern of clause-initial *que*
+- We are interested in extracting clauses that contain a fronted *que*
+    - e.g. *Pues, que no lo diga* 
+- Thus, our pattern should look for *que* preceded by the start of the input, space, or punctuation
+- The following regular expression should match the type of *que* clauses we're interested in:
+    - `((^(que|Que)\\b )|([[:punct:]](que|Que)\\b )|([[:punct:]] (que|Que)\\b ))`
+- Let's take a minute to decode what each group in this expression means:
+    - `(^(que|Que)\\b )`: match the words *que* or *Que* followed by space and preceded by the beginning of the input
+    - `([[:punct:]](que|Que)\\b )`: match the words *que* or *Que* directly preceded by punctuation and followed by space
+    - `([[:punct:]](que|Que)\\b )`: match the words *que* or *Que* preceded by space and punctuation and followed by space
+    - The pipes/vertical bars between the groups indicate *OR*
+    
+## Filtering and annotating data with `grep` and `grepl`
+- `grep` and `grepl` are two functions from the `base` package, the set of functions that ships with R 
+- The two functions are very similar:
+    - Both take an expression and a character vector as their input
+    - Both allow the user to use the Perl advanced regular expression engine
+    - Both allow the user to ignore case when matching
+- The difference rests in the output of the two functions:
+    - `grep` returns the indices of the vector elements that match the expression. 
+        - E.g., if we have a vector of ten elements *`r b<-letters[1:10];b`*, `grep("a", vector)` will return: 1
+    - `grepl` returns `TRUE` / `FALSE` for each element in the vector, depending on whether or not the element matches the expression
+        - E.g., if we have a vector of ten elements *`r b<-letters[1:10];b`*, `grepl("a", vector)` will return: `r grepl("a", b)` 
+- So, in order to keep only the that include at least one case of clause-initial *que*, we could do the following:
+    
+```{r}
+library(dplyr)
+dataSet <- dataSet %>%
+  filter(grepl("((^(que|Que)\\b )|([[:punct:]](que|Que)\\b )|([[:punct:]] (que|Que)\\b ))", text, perl=TRUE))
+```
+
+- In order to facilitate the presentation, we will select just 50 random articles from those that contain clause-initial *que*
+- This can be achieved with the `dplyr` function `sample_n`
+```{r}
+library(dplyr)
+dataSet <- dataSet %>%
+  sample_n(50)
+```
+
+
+## The `stringi` package: working with strings in R
+- `stringi` is a very useful package to work with, well, strings in R
+- The usefullness of stringi lies as much in the transparency of the naming of its functions as in the speed of those functions
+- Thanks to the fact that under the hood all the heavy lifting is performed in *C++* code, `stringi` will nearly always be faster than base R functions that perform the same task. Plus, *stringi* functions are vectorized, meaning that they work as well on one string as on a collection of strings. This consistency makes them easy to program with
+- Note that there's a variant `tidyverse` package for `stringi`: `stringr`, which wraps stringi functions in a way so as to make them comply with the tidyverse syntax. We'll focus on `stringi` for now, but *DataCamp* has an excellent [course on *stringr*](https://www.datacamp.com/courses/string-manipulation-in-r-with-stringr). 
+
+### Splitting into sentences
+- With `grep` and `grepl` we can extract rows from a data.frame that contain one or more instances of the pattern defined by a regular expression
+- In our case, this extracts articles in which clause-initial *que* occurs 
+- To extract only the sentences in which clause-initial *que* occurs, we need to split our texts into sentences and apply the *grepl* filter again
+- We can achieve this with `stri_split_boundaries`.  
+- This function takes as its inputs a character vector and a split type (*word* or *sentence* are the most commonly used).
+- The function returns a list of the same length as the input character vector (e.g., if we input six articles, we get a six-item list). In each list item, we find all sentences that were found in the articles. So, schematically:
+    - INPUT:
+        - Article 1
+        - Article 2
+        - Article 3
+    - OUTPUT:
+        - Article 1
+            - Sentence 1
+            - Sentence 2
+            - Sentence 3
+        - Article 2
+            - Sentence 1
+            - Sentence 2
+            - Sentence 3
+            - ...
+        - Article 3  
+            - Sentence 1
+            - Sentence 2
+            - Sentence 3
+            - ...
+
+```{r} 
+library(stringi)
+sentences <- stri_split_boundaries(dataSet$text, type="sentence")
+```
+
+- Because of this list structure, we need to process the list further in order to transform it back to a tidy dataframe with the same information as our original input dataset.  
+- Here's where the looping function `lapply` moves into the picture. 
+    - `lapply` applies the function we define in the `FUN` argument to each item of the input vector. This function can only have one argument (`index` in the example below), to which we pass the individual list items
+    - The output of `lapply` is always a list of the same length as the input vector. This ensures that the result of `lapply` has a predictable shape, for which it is a convenient function to program with. 
+        - In other programming languages (e.g., Python, C++), we would use a `for` or `foreach` loop to achieve the same result, but these constructs will nearly always be slower in R than `lapply`. 
+- Here, we will loop over the indices of the sentences (`1:length(sentences)`). For each index, we will apply the function we define in `FUN`
+```{r} 
+newData <- lapply(1:length(sentences), FUN=function(index) {
+# strip leading and trailing spaces for the sentences in the list items
+outputSentences <- stri_trim(sentences[[index]]) 
+
+# Look up the row in the original dataSet. Copy the attributes to a new data.frame
+lookup <- dataSet[index, ] 
+
+# We don't need the entire articles, so we select everything except text
+lookup <- lookup %>% 
+  select(-text)
+
+# We add our sentences
+lookup <- lookup %>% 
+  mutate()
+
+# We return a data.frame with the original information.
+# We add an ordering variable (order) to record the original ordering of the sentences
+# We add our outputSentences 
+# The stringsAsFactors=FALSE argument ensures that we don't treat strings as factors,
+# This avoids a lot of problems in later processing
+
+data.frame(source=lookup$source, author=lookup$tags, title=lookup$title, description=lookup$description, section=lookup$section, date=lookup$date, order=1:length(outputSentences), sentences=outputSentences, stringsAsFactors=FALSE)
+
+})
+
+```
+- The code above produces a list of data.frames in which each row corresponds with a sentence from an article
+- To glue everything together, we can use the `dplyr` function `bind_rows`, which converts the list of data.frames to a single large data.frame
+- Subsequently, another round of filtering ensures that we only keep the sentences we are interested in
+```{r} 
+newData <- newData %>%
+  bind_rows() %>%
+ filter(grepl("((^(que|Que)\\b )|([[:punct:]](que|Que)\\b )|([[:punct:]] (que|Que)\\b ))", sentences, perl=TRUE))
+
+head(newData)
+```
+
+### `stri_extract_*_regex`
+
+- With `stri_extract_*_regex` we can extract:
+    - All instances of a pattern, with `stri_extract_all_regex`
+    - The first instance of a pattern, with `stri_extract_first_regex`
+    - The last instance of a pattern, with `stri_extract_last_regex`
+- Each of these functions takes a character vector as its first argument and a pattern as its second argument. 
+- `stri_extract_all_regex` returns a list of the same length as the input vector. Each list item contains all matches that were found in the corresponding input vector item
+- `stri_extract_first_regex` and `stri_extract_last_regex` return a character vector of the same length as the input vector. In each output vector item, we obtain respectively, the first and the last item that was found in the input vector. 
+- The three functions return `NA` (not applicable) when there are no matches to be found in an input vector item
+- Using these three functions strategically will allow us to write less complex regular expressions. 
+- Consider, for example, English tag questions. To extract just the tag from a sentence like *The cat doesn't like her kibble right in the middle of her plate, right?*, we can use `stri_extract_last_regex` to make sure that we only match the last instance of *\\b(right)\\b*: 
+
+```{r} 
+sentence <- "The cat doesn't like her kibble right in the middle of her plate, right?"
+stri_extract_all_regex(sentence,"\\b(right)\\b" )
+stri_extract_last_regex(sentence,"\\b(right)\\b" )
+
+```
+
+### `stri_replace_*_regex`
+- With `stri_replace_*_regex` we can replace:
+    - All instances of a pattern, with `stri_replace_all_regex`
+    - The first instance of a pattern, with `stri_replace_first_regex`
+    - The last instance of a pattern, with `stri_replace_last_regex`
+- Each of these functions takes a character vector as its first argument and a pattern as its second argument. 
+- Using these three functions strategically will allow us to write less complex regular expressions. 
+- Consider, for example, tag questions. To replace just the tag from a sentence like *The cat doesn't like her kibble right in the middle of her plate, right?* with *isn't it*, we can use `stri_replace_last_regex` to make sure that we only match the last instance of *\\b(right)\\b*: 
+
+```{r} 
+sentence <- "The cat doesn't like her kibble right in the middle of her plate, right?"
+stri_replace_all_regex(sentence,"\\b(right)\\b", "isn't it")
+stri_replace_last_regex(sentence,"\\b(right)\\b", "isn't it")
+```
+
+# Using TreeTagger to POS-tag que-inital sentences
+- [TreeTagger](http://www.cis.uni-muenchen.de/~schmid/tools/TreeTagger/) (Schmid, 2016) is a Part-of-Speech tagger, a piece of software that assigns POS labels to input sentences. 
+- Although more modern and elaborate competitors exist (e.g., Google's SyntaxNet, which offers syntactic labeling on top of POS-labeling), treeTagger is by far the most easy-to-use POS tagger on the market and it is pretty accurate too.  
+- On top of that, it comes with pre-trained models for Bulgarian, Catalan, Chinese, Czech, Dutch, English, Estonian, Finnish, French, German, Italian, Latin, Portuguese, Romanian, Russian, Slovak, Slovanian, Spanish, and Swahili. 
+- To install TreeTagger, perform the following steps, depending on your operating system.
+
+## Installing On windows
+-  Not too many people are aware of this, but Windows 10 actually offers the possibility to install and run the Ubuntu Linux terminal (command-line) as a program on top of Windows 10. 
+- To obtain this build-in version of the Linux terminal, follow the steps described in this article: https://www.windowscentral.com/how-install-bash-shell-command-line-windows-10 
+- Afterwards, follow the installation instructions for Mac/Linux detailed below
+
+
+## Installing On Mac / Linux
+
+1. Open a shell session
+    - On *Windows*: Start > Search > type `bash.exe`
+    - On *Mac/Linux*, search for a program called *Terminal* in your application folder.
+2. In the shell type the following command to create a `treeTagger` folder in your home directory
+```{bash, echo=T, eval=F}
+mkdir ~/treeTagger 
+```
+
+3. Switch to the newly created directory with the `cd` (change directory) command
+
+```{bash, echo=T, eval=F}
+cd  ~/treeTagger 
+```
+
+4. Download the TreeTagger program with `wget`. To do so, use one of the following commands, depending on your OS (Windows users taking advantage of the Ubuntu shell on Windows should use the Linux version)
+```{bash, echo=T, eval=F}
+# Linux
+wget http://www.cis.uni-muenchen.de/~schmid/tools/TreeTagger/data/tree-tagger-linux-3.2.1.tar.gz
+# Mac
+wget http://www.cis.uni-muenchen.de/~schmid/tools/TreeTagger/data/tree-tagger-MacOSX-3.2.tar.gz
+```
+
+5. Unzip the TreeTagger program with `tar`
+```{bash, echo=T, eval=F}
+# Linux
+tar -xzvf tree-tagger-linux-3.2.1.tar.gz
+
+# Mac
+tar -xzvf tree-tagger-MacOSX-3.2.tar.gz
+```
+
+6. Download the tagging scripts
+```{bash, echo=T, eval=F}
+wget http://www.cis.uni-muenchen.de/~schmid/tools/TreeTagger/data/tagger-scripts.tar.gz
+```
+
+7. Download the installation script
+
+```{bash, echo=T, eval=F}
+wget http://www.cis.uni-muenchen.de/~schmid/tools/TreeTagger/data/install-tagger.sh
+```
+
+8. Download the parameter files. Here we will only be working with the *Spanish - Ancora* models
+
+```{bash, echo=T, eval=F}
+wget http://www.cis.uni-muenchen.de/~schmid/tools/TreeTagger/data/spanish-ancora-par-linux-3.2-utf8.bin.gz
+```
+
+9. Run the installation script 
+```{bash, echo=T, eval=F}
+sh install-tagger.sh
+```
+
+10. Test if the tagger is working. The following command sends text to the tagger. The output should be a tab-separated table representation of the tagged sentence
+
+```{bash, echo=T, eval=T}
+echo 'Este es un gato' | ~/treeTagger/cmd/tree-tagger-spanish-ancora
+```
+
+## Using TreeTagger from within R
+- The command-line interface of TreeTagger is great, but not very flexible, as it only provides a single way of inputting text and retrieving information. 
+- Fortunately, writing an R binding for the TreeTagger is not at all hard to achieve. 
+- The following function will parse the tab-separated table layout to a more useful format, which appends the POS-tags and word lemmas to the end of the input words and separates the elements with underscores. E.g., `cat > cat_NN_cat`
+- To make life easier, the uppercase tags are transformed to lowercase, using the function `stri_trans_to_lower`
+
+```{r, eval=TRUE}
+TreeTag <- function(text, parserPath="~/treeTagger/cmd/tree-tagger-spanish-ancora")
+{
+  library(stringi)
+  options(stringsAsFactors = FALSE)
+  prefix<-ifelse(Sys.info()[['sysname']]=="Windows", 'bash -c "', "")
+    suffix <-ifelse(Sys.info()[['sysname']]=="Windows", '"', "")
+  tagged <- lapply(text, FUN = function(x) {
+    output <- system(
+      paste0(prefix, 'echo ', shQuote(x),'|', parserPath, suffix, sep=""),
+      intern = T, ignore.stdout = F, ignore.stderr = T)
+    output <- stri_split_fixed(output, "\t")
+    output <- do.call(rbind, output)
+    output <- as.data.frame(output, stringsAsFactors=FALSE)
+    names(output) <- c("Word", "POS", "Lemma")
+   slashtags <- paste(output$Word, stri_trans_tolower(output$POS), stri_trans_tolower(ifelse(output$Lemma=="<unknown>", output$Word, output$Lemma)), sep="_", collapse=" ") 
+    return(slashtags)
+  })
+  
+  return(unlist(tagged))
+}
+
+TreeTag("Este es un gato")
+
+```
+
+- Of course, in most cases you will not use this function to annotate a single string, but rather a column of sentences
+- For instance, to annotate all sentences in our corpus, we can simply call:
+
+```{r, eval=TRUE}
+newData$tagged <-TreeTag(newData$sentences)
+head(newData)
+```
+
+# Generating a concordance with R
+- Once we have annotated our dataset with POS tags, we can use this extra layer of information to define more powerful regular expressions
+- These regular expressions will allow us to create a concordance for clause-intial *que*
+- The following function will search the data.frame specified in the argument `corpus` for the pattern defined in the argument `pattern`, in the column defined in the argument column.
+- The code looks advanced, but let us try to decipher what it means. Read the comments below and try to see if you can manage to understand what the code does. 
+
+```{r, eval=TRUE}
+makeConcordance <- function(corpus, pattern=NULL, column = NULL)
+{
+# We check if our pattern is empty (NULL). If the pattern is empty, we stop the function
+  if(is.null(pattern)) {
+    stop("You must define a search pattern for your concordance.")
+  }
+ 
+# We convert the corpus argument to a 'normal' dataframe. This is a step that allows us to program with it more easily
+  dataFrame <- as.data.frame(corpus)
+  
+# We add an CONC_ID column to the dataFrame, which provides an unique identifier for each row. This will guard against data duplication
+  dataFrame$CONC_ID <- 1:nrow(dataFrame)
+  
+  
+
+# We loop over the row indices values with the loop function `lapply`
+  lines <- lapply(1:nrow(dataFrame), FUN = function(index) {
+
+# For each line, we extract all instances of pattern from the text column (coded here as the x argument of the function FUN)
+    token <- stri_extract_all_regex(dataFrame[index, column], pattern)[[1]]
+# For each line, we split the value of our text column in a part before and after the instances of 
+# pattern
+    splits <- stri_split_regex(dataFrame[index, column], pattern)
+# We pre-allocate before/after vectors of the same length as our tokens
+# This is to increase the speed of our for-loop
+    before <- vector("character", length(token))
+    after <- vector("character", length(token))
+# We keep track of which CONC_ID (line number) corresponds with our tokens
+    id_str <- dataFrame[index, "CONC_ID"]
+    for	(i in 1:length(token))
+    {
+      before[i] <- splits[[1]][i]
+      after[i] <-  splits[[1]][i + 1]
+    }
+    return(data.frame(before = before, token = token, after = after, CONC_ID = id_str,
+                      stringsAsFactors = FALSE))
+  })
+# After looping, we bind all single-row data.frames to a large data.frame
+  concordance <- bind_rows(lines) %>%
+# We use the dplyr function left_join to add our concordance columns to our input corpus
+# We use the CONC_ID to identify the original line numbers
+  left_join(dataFrame, by="CONC_ID") %>%
+# We double-check that we did not introduce any duplicate tokens
+  filter(!duplicated(after))
+# We return the result
+  return(concordance)
+}
+```
+
+- Of course, before we can generate a concordance for all initial-que clauses, we need a regular expression pattern to extract the entire clause
+- The following pattern will match the entire clause with clause-initial 'que': `(?<=^|[[:punct:]])( que| Que|que|Que)_sconj_que\\b (\\b([[:alnum:]_\\.]+)\\b( |))+`
+- It reads as follows:
+    - *Match* que_sconj_que *OR* Que_sconj_que, *followed by one or more words, provided it is preceded by the start of the line or punctuation. Stop the matching if you encounter punctuation or the end of the line*
+
+```{r makeConc}
+pattern <-"(?<=^|[[:punct:]])( que| Que|que|Que)_sconj_que\\b (\\b([[:alnum:]_\\.]+)\\b( |))+"
+
+newData <- newData %>%
+  filter(grepl(pattern, tagged, perl=T)) 
+newData_conc <-makeConcordance(newData, pattern, "tagged")
+head(newData_conc)
+```
+
+# Using regular expressions to annotate a concordance based on the TreeTagger labels
+- Once we have a concordance of POS-tagged sentences, we can use this concordance to extract useful information about our tokens
+- Here, we will add the following dimensions:
+    - Sentence-initial vs. sentence-internal clause
+    - Verb
+    - Mode: subjunctive vs. indicative
+    - Verb person and number
+    - Verb lemma
+    
+## Sentence-initial vs. sentence-internal clause
+- The `token` column of our concordance data.frame contains the entire *que*-clause
+- Therefore, if no sentence parts can be found before our clause, we can assume that the token is sentence-initial
+- To test this, we can use the general-purpose function `ifelse`, which tells R to check for the condition defined in its first argument, and to perform the action or return the  value specified in its second argument if that condition evaluates TRUE. In all other cases, R will perform the action or return the value specified in the third argument.  
+- So, schematically, the idea is: 
+    - *IF* first argument, *THEN* second argumet, *ELSE* third argument
+- Here, the condition we will check for is the string length of our `before` column (in characters; another handy function from the *stringi* package). 
+- If that column has length zero, then we will assign the label 'sentence-initial'. Else, we will assign the label 'sentence-internal'.  
+
+```{r sentencePosition}
+newData_conc <- newData_conc %>%
+    ungroup() %>%
+    mutate(sentence_position=ifelse(stri_length(before)==0, "sentence-initial", "sentence-internal")) 
+
+head(newData_conc$sentence_position)
+```   
+    
+## Verb
+- To extract the verb from the clause, first we have to understand how TreeTagger labels verbs
+- To gain a better understanding, let us label three sample sentences, which instantiate the four most common verb types in Spanish:
+    - *El gato duerme* (Intransitive)
+    - *A los gatos les gusta dormir* (Psychological)
+    - *Pixie es un gato* (Copula)
+    - *El gato come sus croquetas* (Transitive)
+    
+```{r tagexperiment}
+tagged <- TreeTag(c("El gato duerme", 
+                    "A los gatos les gusta dormir", 
+                    "Pixie es un gato", 
+                    "El gato come sus croquetas"), "~/treeTagger/cmd/tree-tagger-spanish-ancora")
+tagged
+```
+
+- As we can see, finite verb forms are labeled with the tag *verb* or *aux*, followed by an indication of their mood (*ind*= indicative; *sub*=subjunctive, *cnd*=conditional), their number (*sing*=singular; *plur*=plural), their person (*1-3*), tense (*pres.fin*), and their lemma
+- Thus, to extract all verb finite forms from the *token* column, we can define the following regular expression:
+    - `\\b([[:alpha:]]+_(verb|aux)\\.(ind|sub|cnd)\\.(sing|plur)\\.[1-3]{1}\\.[[:alpha:]]+\\.(fin)_[[:alpha:]]+)\\b`
+- If we apply this expression to our toy sentences with *stri_extract_first_regex*, we obtain the following results
+
+```{r learnannotations}
+stri_extract_first_regex(tagged, "\\b([[:alpha:]]+_(verb|aux)\\.(ind|sub|cnd)\\.(sing|plur)\\.[1-3]{1}\\.[[:alpha:]]+\\.(fin)_[[:alpha:]]+)\\b")
+```
+
+- Let us apply this expression to our dataset to extract the verbs from our clauses and store them in a new column called *verb*. With *dplyr*, this is as easy as:
+```{r annotations}
+newData_conc <- newData_conc %>%
+    mutate(verb=stri_extract_first_regex(token, "\\b([[:alpha:]]+_(verb|aux)\\.(ind|sub|cnd)\\.(sing|plur)\\.[1-3]{1}\\.[[:alpha:]]+\\.(fin)_[[:alpha:]]+)\\b"))
+head(newData_conc$verb)
+```  
+    
+## Mode: subjunctive vs. indicative
+- Extracting the annotated verb form from our tokens is likely to be no more than an intermediary step geared towards extracting more useful, abstract features such as verb mood, person and number, and the verb lemma 
+- This step allows us to write less complex, more readable regular expressions. That is, with the verb column, we can allow an expression to annotate for mood to be as simple as:
+    - `(?<=\\.)(ind|sub|cnd)(?=\\.)`
+    - This decodes to *ind*, *sub*, or *cnd*, preceded and followed by a dot
+```{r verb}
+newData_conc <- newData_conc %>%
+    mutate(mood=stri_extract_first_regex(verb, "(?<=\\.)(ind|sub|cnd)(?=\\.)")) 
+head(newData_conc$mood)
+```  
+
+## Verb person 
+- To extract the verb person from the verb form, we can use another fairly simply regular expression:
+    - `(?<=\\.(sing|plur)\\.)([1-3]{1})(?=\\.)`
+    - This decodes to a single digit in the range 1-3, followed by a dot and preceded by a dot,  *sing* or *plur*, and a dot
+```{r verbperson}
+newData_conc <- newData_conc %>%
+    mutate(person=stri_extract_first_regex(verb, "(?<=\\.(sing|plur)\\.)([1-3]{1})(?=\\.)")) 
+head(newData_conc$person)
+```  
+  
+## Verb number
+- To extract the verb number from the verb form, we can come up with another variant of these elegant expressions:
+    - `(?<=\\.)(sing|plur)(?=\\.)`
+```{r verbnumber}
+newData_conc <- newData_conc %>%
+    mutate(verb_number=stri_extract_first_regex(verb, "(?<=\\.)(sing|plur)(?=\\.)")) 
+head(newData_conc$verb_number)
+```  
+  
+## Verb lemma   
+- Finally, to extract the verb lemma, we can take advantage of the function `stri_extract_last_regex` to simplify the requirements for our regular expression.
+- That is, the verb lemmas are the last part of the verb tag. This means that we can define them as the last alphanumeric string, preceded by an underscore and followed by the word boundary
+- The following expression translates this description to regular expression logic:
+    - `(?<=_)[[:alpha:]]+(?=\\b)`
+
+```{r verblemma}
+newData_conc <- newData_conc %>%
+    mutate(verb_lemma=stri_extract_last_regex(verb, "(?<=_)[[:alpha:]]+(?=\\b)")) 
+head(newData_conc$verb_lemma)
+```  
+
+- This concludes our overview of the way we can parse TreeTagger annotations to features that can support linguistic analysis
+- The take-home message here should be that:
+    - We can afford to write simpler regular expressions if we apply the different `stri_extract_*regex` functions strategically
+    - We should always develop and test expressions on a small sample of sentences. Afterwards we should thoroughly evaluate the performance of our expressions on a larger dataset
+    - Your annotations will only be as good as the tagger is
+- Let us now turn our attention to how we can use *stringi* and *dplyr* functions to count words and sentences in a corpus, and how we can use those counts to compile balanced corpora
+
+```{r readAgain, echo=FALSE}
+dataSet <- suppressWarnings(suppressMessages(read_csv("~/Desktop/scraping/textData_deduplicated.csv")))
+```
+
+# Counting words and sentences in a corpus
+- The *stringi* package does not count words or sentences in the way a linguist would
+- Rather, the package counts *boundaries*: separators between elements the package defines as, respectively, characters, words, and sentences
+- As a result, the character counts produced by *stringi* are very reliable, but the other counts may be off by some margin of error, as these are based on assumptions (e.g., words are separated by punctuation, line starts, or line endings) that may be (completely) wrong for your corpus
+- Still for most purposes, the counts produced by *stringi* are more than reliable enough 
+- The package includes two 'counting' functions, which are rather self-explanatory:
+    - `stri_length`: measures the length of the string, in characters
+    - `stri_count_boundaries`: counts the number of word or sentence boundaries in the text. 
+        - As with `stri_split_boundaries`, set `type` to *word* to count words
+        - As with `stri_split_boundaries`, set `type` to *sentence* to count sentences
+```{r countWords}
+dataSet <- dataSet %>%
+  mutate(word_count=stri_count_boundaries(text, type="word")) %>%
+  mutate(sentence_count=stri_count_boundaries(text, type="sentence"))
+head(dataSet)
+```
+- Of course, these functions will most often be used to produce summary statistics about a corpus or its sections
+- With the *dplyr* functions `group_by` and `summarise` and the *stringi* function `stri_count_boundaries`, such statistics can be computed fairly easily
+- Notice that we add `sum` here to summarise the counts by group in a single number. The `na.rm=TRUE` argument of `sum` is used to avoid that any `NA` (not applicable) result for the *stringi* functions would cause `sum` to return `NA` rather than the sum of the valid counts. 
+```{r summarisationCounts}
+dataSet %>%
+  group_by(source) %>%
+  summarise(word_count=sum(stri_count_boundaries(text, type="word"), na.rm=TRUE), 
+            sentence_count=sum(stri_count_boundaries(text, type="sentence"), na.rm=TRUE)) %>%
+  head()
+```
+
+# Extracting a random selection of articles, by source
+- Another common task is the balancing of a corpus. That is, we want to compile a collection of texts that includes a similar selection of topics, dialects, discourse types, etc. 
+- Thanks to the *dplyr* functions `group_by`, `filter` and `sample_n` we can sample a random selection of *N* elements from the groups created by the grouping dimensions
+- For instance, if we want to sample five random articles from each source and section that contains five articles or more, we can use the following code:
+
+```{r sampler}
+dataSet %>%
+  group_by(source, section) %>%
+  filter(n() >= 5) %>%
+  sample_n(5, replace=FALSE) %>%
+  head()
+```
+
+# Extracting a random selection of ± N words from a corpus, by source
+- Finally, another common task when compiling corpora consists in topping off the corpus after a random selection of N words has been obtained, often in function of some dimension (e.g., source, section, author, etc.)
+- With a tidy data.frame corpus and some help of the functions we have seen in this tutorial, we attack the problem as follows:
+    - Group the data by the dimensions you want to use to guide the sampling
+    - Create a new column, to which you assign random numbers between 1 and a number higher than the number of rows in the data.frame
+    - Arrange the data by the grouping factors and the new column
+    - Group the data again by the grouping factors (`arrange` will break the groups, which is something you have to be careful with)
+    - Add a new column in which you store the cumulative sum of the number of words in the texts
+    - Keep only rows with a cumulative frequency below a particular threshold
+- In code, the steps detailed above would translate to the following:
+
+```{r cumsum}
+dataSet %>%
+  group_by(source) %>%
+  mutate(sample_column=sample(1:n()*2, n(), replace=F)) %>%
+  arrange(source, sample_column) %>%
+  group_by(source, sample_column) %>%
+  mutate(cumulative_word_count=cumsum(stri_count_boundaries(text, type="word"))) %>%
+   ungroup() %>%
+  filter(cumulative_word_count <= 200000) %>%
+  head()
+```
+
+# A word of advice
+- The code snippets that we have seen here scattered throughout this tutorial may tempt you to open an R session and start copy/pasting everything straight to the R console
+- This is generally a bad idea, because this way you will lose all of your code once you close R
+- The best way is to create a script file (in RStudio: File > New File > R Script), in which you will write your code before you execute it
+- Don't forget to save your code after every update! Otherwise, if you make a mistake and R crashes, you will lose your last (potentially brilliant) edits
+
+# Conclusion
+- With this tutorial I hope to have shown you that R, regular expressions,  *stringi*, and *dplyr* are great tools for corpus-linguistic analysis
+- The advantage of using *dplyr* syntax in your corpus projects consists in that:
+    - The code is easier to read and maintain
+    - The code can be ported to different backends with only minor tweaks: SQL, or, if you're feeling ambitious, even Apache Spark, the most commonly used distributed computing platform for the analysis of Big Data
+- The main advantage of using R for your corpus projects consists in that the data collection, preparation, analysis, and even the writing of the final paper (see [Rmarkdown](https://rmarkdown.rstudio.com/)) can all be performed in the same place, using the same programming language and with many opportunities for the automation of repeating tasks and form-based annotations
+- As a result, R (in the context of corpus linguistics) has a steep learning curve and the time spent learning R quickly pays off by decreasing the amount of time you have to spent copy/pasting stuff and annotating
+- On top of that, once you get the hang of it, programming is great fun!
+
+# References
+- Gagolewski, M., & Tartanus, B. (2016). *R package stringi: Character string processing facilities.* Retrieved from https://cran.r-project.org/web/packages/stringi/index.html
+- Schmid, H. (2016). *TreeTagger - a part-of-speech tagger for many languages.*
+Retrieved from http://www.cis.uni-muenchen.de/~schmid/tools/TreeTagger/
